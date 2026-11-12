@@ -16,12 +16,19 @@ CachyOS configuration; pacman reports unavailable packages and stops.
 The package step always installs Zsh, including with a replacement package list,
 and sets it as the current user's login shell. New login sessions use Zsh;
 `--skip-packages` also skips this shell change.
+The package step also installs `xdg-user-dirs`. During configuration, the restore
+enables `~/Projects` as the Projects user directory if none is configured;
+an existing custom Projects location is preserved. `--skip-config` skips this.
 
 The list includes CachyOS's `brave-origin-bin` and the native Arch `zed` package,
 Docker and Compose, Tailscale, cloudflared, and the CLI tools and runtimes. Zed
 and Brave are installed as native packages. PyPy tracks the version provided by
-CachyOS/Arch. The previous Fedora NVIDIA installer is not suitable for CachyOS;
-use CachyOS's hardware-specific driver instructions if needed.
+CachyOS/Arch. When an NVIDIA GPU is detected, the package step uses CachyOS
+`chwd` to install the closed-source `nvidia-dkms-580xx` profile (the PRIME
+variant on laptops). The profile must support the GPU; chwd reports an error if
+it does not. The driver may conflict with an existing NVIDIA profile and may
+require package confirmation. Reboot after installation. Use `--skip-nvidia`
+to leave drivers alone; `--skip-packages` skips this step as well.
 
 ## Proton Pass and dotfiles
 

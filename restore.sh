@@ -18,6 +18,7 @@ Restore CachyOS: pacman packages, dotfiles, services, and Git.
   --packages-file PATH         Override packages/system.txt.
   --dry-run                   Preview all selected steps without changes.
   --skip-packages             Skip package installation.
+  --skip-nvidia               Skip NVIDIA driver installation.
   --skip-dotfiles             Skip the chezmoi restore.
   --skip-config               Skip service and Git configuration.
   --services-file PATH        Use a different list of services for configuration.
@@ -60,6 +61,7 @@ while (( $# )); do
             shift 2 ;;
         --dry-run) dry_run=true; shift ;;
         --skip-packages) install_packages=false; shift ;;
+        --skip-nvidia) package_args+=(--skip-nvidia); shift ;;
         --skip-dotfiles) restore_dotfiles=false; shift ;;
         --skip-config) configure_system=false; shift ;;
         --services-file|--git-name|--git-email)

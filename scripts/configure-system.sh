@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Start restored system services and configure the current user's Git identity.
+# Configure user directories, system services, and the current user's Git identity.
 
 if [[ ${BASH_SOURCE[0]} != "$0" ]]; then
     printf 'Run this script directly; do not source it.\n' >&2
@@ -16,8 +16,8 @@ Usage: ./scripts/configure-system.sh [OPTIONS]
   --services-file PATH  Use a different list of systemd services.
   --git-name NAME       Git author name (default: Fabien Dufour).
   --git-email EMAIL     Git author email (default: github@id.fabyd.dev).
-  --skip-services       Configure only Git.
-  --skip-git            Configure only services.
+  --skip-services       Skip service configuration.
+  --skip-git            Skip Git configuration.
   --dry-run             Show commands without making changes.
   --help                Show this help.
 
@@ -25,6 +25,7 @@ Docker and tailscaled are enabled at boot and started. Other services, including
 cloudflared, are started using their existing configuration. No accounts are
 authenticated, tunnel credentials replaced, or group memberships changed.
 RESTORE_GIT_NAME and RESTORE_GIT_EMAIL can override the default Git identity.
+The Projects user directory is enabled if it is not already configured.
 EOF
 }
 
@@ -97,6 +98,8 @@ if $configure_git; then
 fi
 
 if ! $dry_run; then
+    command -v xdg-user-dir >/dev/null 2>&1 && command -v xdg-user-dirs-update >/dev/null 2>&1 ||
+        die 'xdg-user-dirs is missing. Run install-packages.sh first.'
     if $configure_git; then
         command -v git >/dev/null 2>&1 || die 'git is missing. Run install-packages.sh first.'
     fi
@@ -120,6 +123,19 @@ run() {
         "$@"
     fi
 }
+
+if $dry_run; then
+    printf 'Would enable the Projects user directory at %s/Projects if it is not configured.\n' "$HOME"
+else
+    projects_dir=$(xdg-user-dir PROJECTS)
+    if [[ -z $projects_dir || $projects_dir == "$HOME" ]]; then
+        mkdir -p -- "$HOME/Projects"
+        xdg-user-dirs-update --set PROJECTS "$HOME/Projects"
+        printf 'Enabled the Projects user directory at %s/Projects.\n' "$HOME"
+    else
+        printf 'Projects user directory is already configured: %s\n' "$projects_dir"
+    fi
+fi
 
 if [[ -n ${seen[docker.service]:-} ]]; then
     run docker compose version

@@ -10,20 +10,26 @@ project_dir=$(cd -- "$script_dir/../.." && pwd -P)
 source "$project_dir/lib/common.sh"
 file=$project_dir/packages/system.txt
 dry_run=false
+install_nvidia=true
 while (( $# )); do
     case "$1" in
         --file) (( $# >= 2 )) && [[ -n $2 ]] || restore_die '--file requires a path.'; file=$2; shift 2 ;;
         --dry-run) dry_run=true; shift ;;
-        --help|-h) printf 'Usage: %s [--file PATH] [--dry-run]\n' "$0"; exit 0 ;;
+        --skip-nvidia) install_nvidia=false; shift ;;
+        --help|-h) printf 'Usage: %s [--file PATH] [--skip-nvidia] [--dry-run]\n' "$0"; exit 0 ;;
         *) restore_die "Unknown argument: $1" ;;
     esac
 done
 restore_require_user
 restore_require_cachyos
 restore_read_list "$file" packages pacman
-if [[ ! " ${packages[*]} " == *" zsh "* ]]; then
-    packages+=(zsh)
-fi
+required_packages=(zsh xdg-user-dirs)
+$install_nvidia && required_packages+=(chwd)
+for required_package in "${required_packages[@]}"; do
+    if [[ ! " ${packages[*]} " == *" $required_package "* ]]; then
+        packages+=("$required_package")
+    fi
+done
 if (( ${#packages[@]} )) && ! $dry_run; then
     command -v pacman >/dev/null 2>&1 || restore_die 'pacman is required.'
     command -v sudo >/dev/null 2>&1 || restore_die 'sudo is required.'
@@ -31,6 +37,36 @@ fi
 # Refresh and upgrade together to avoid a partial upgrade on Arch-based systems.
 if (( ${#packages[@]} )); then
     restore_run sudo pacman -Syu --needed -- "${packages[@]}"
+fi
+
+if $install_nvidia; then
+    if $dry_run; then
+        printf 'Would detect NVIDIA graphics hardware and request the proprietary 580xx chwd profile if present.\n'
+    else
+        nvidia_found=false
+        for device in /sys/bus/pci/devices/*; do
+            [[ -r $device/vendor && -r $device/class ]] || continue
+            read -r vendor < "$device/vendor"
+            read -r class < "$device/class"
+            if [[ $vendor == 0x10de && ( $class == 0x0300* || $class == 0x0302* || $class == 0x0380* ) ]]; then
+                nvidia_found=true
+                break
+            fi
+        done
+        if $nvidia_found; then
+            command -v chwd >/dev/null 2>&1 || restore_die 'chwd is missing after package installation.'
+            profile=nvidia-dkms-580xx
+            if [[ -r /sys/class/dmi/id/chassis_type ]]; then
+                read -r chassis_type < /sys/class/dmi/id/chassis_type
+                case "$chassis_type" in 8|9|10|11|31) profile+=.prime ;; esac
+            fi
+            printf 'Installing the proprietary NVIDIA driver using chwd profile %s.\n' "$profile"
+            sudo chwd -i "$profile" || restore_die 'NVIDIA driver installation failed; check chwd output and GPU compatibility.'
+            printf 'Reboot after the restore to load the NVIDIA driver.\n'
+        else
+            printf 'No NVIDIA graphics device detected; skipping NVIDIA driver installation.\n'
+        fi
+    fi
 fi
 
 # Read the account database instead of $SHELL, which may describe an old session.
